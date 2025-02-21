@@ -1,11 +1,12 @@
-use crate::http::api::*;
+use crate::http::api::{system_routes, tokenize_routes};
+use crate::service::shared_tokenizer::SharedTokenizer;
 use crate::setting::settings::Settings;
 use axum::http::{StatusCode, Uri};
 use axum::Router;
 use tokio::net::TcpListener;
 
 mod http;
-mod repository;
+mod models;
 mod service;
 mod setting;
 
@@ -25,7 +26,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn routes() -> Router {
-    let all_routes = Router::new().nest("/v1", system_routes()).nest("/v1", test_routes());
+    let shared_tokenizer = SharedTokenizer::new();
+
+    let all_routes = Router::new()
+        .nest("/v1", system_routes())
+        .nest("/v1", tokenize_routes(shared_tokenizer));
 
     Router::new().nest("/api", all_routes).fallback(fallback)
 }

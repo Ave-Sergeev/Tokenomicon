@@ -1,25 +1,43 @@
-use axum::http::{StatusCode, Uri};
-use axum::response::{IntoResponse, Response};
+use crate::models::request::TokenizeRequest;
+use crate::models::response::TokenizeResponse;
+use crate::service::shared_tokenizer::SharedTokenizer;
+use crate::service::tokenizer::Tokenizer;
+use axum::response::Response;
 use axum::routing::get;
-use axum::Router;
-
-// TODO: Возвращать Ok(200)
-async fn health_check() -> &'static str {
-    "Alive and well, eagle!"
-}
-
-async fn test_function() -> Response {
-    StatusCode::OK.into_response()
-}
+use axum::{
+    extract::{Extension, Json, Path},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{post, Router},
+};
 
 pub fn system_routes() -> Router {
     Router::new().route("/health", get(health_check))
 }
 
-pub fn test_routes() -> Router {
-    Router::new().route("/test", get(test_function))
+pub fn tokenize_routes(shared_tokenizer: SharedTokenizer) -> Router {
+    Router::new()
+        .route("/tokenize/{method}", post(tokenize))
+        .layer(Extension(shared_tokenizer))
 }
 
-async fn fallback(uri: Uri) -> (StatusCode, String) {
-    (StatusCode::NOT_FOUND, format!("Handler for route '{uri}' not found!"))
+async fn health_check() -> Response {
+    StatusCode::OK.into_response()
+}
+
+async fn tokenize(
+    Extension(state): Extension<SharedTokenizer>,
+    Path(method): Path<String>,
+    Json(payload): Json<TokenizeRequest>,
+) -> Result<Json<TokenizeResponse>, (StatusCode, String)> {
+    let tokenizer = state.tokenizer.lock().unwrap();
+
+    let tokens = match method.as_str() {
+        "bpe" => tokenizer.tokenize_bpe(&payload.text),
+        "words" => Tokenizer::tokenize_words(&payload.text),
+        "chars" => Tokenizer::tokenize_chars(&payload.text),
+        _ => return Err((StatusCode::BAD_REQUEST, "Invalid tokenization method".to_string())),
+    };
+
+    Ok(Json(TokenizeResponse { tokens }))
 }
