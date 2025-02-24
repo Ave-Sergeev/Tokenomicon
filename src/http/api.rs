@@ -1,11 +1,11 @@
-use crate::models::request::TokenizeRequest;
-use crate::models::response::TokenizeResponse;
-use crate::service::shared_tokenizer::SharedTokenizer;
-use crate::service::tokenizer::Tokenizer;
+use crate::models::request::{DecodeRequest, Method, SimpleRequest, TextRequest, TrainRequest};
+use crate::models::response::{DecodeResponse, EncodeResponse, TokenizeResponse};
+use crate::service::shared_state::Shared;
+use crate::service::simple_tokenizer::SimpleTokenizer;
 use axum::response::Response;
 use axum::routing::get;
 use axum::{
-    extract::{Extension, Json, Path},
+    extract::{Extension, Json},
     http::StatusCode,
     response::IntoResponse,
     routing::{post, Router},
@@ -15,29 +15,77 @@ pub fn system_routes() -> Router {
     Router::new().route("/health", get(health_check))
 }
 
-pub fn tokenize_routes(shared_tokenizer: SharedTokenizer) -> Router {
+pub fn tokenize_routes(shared_state: Shared) -> Router {
     Router::new()
-        .route("/tokenize/{method}", post(tokenize))
-        .layer(Extension(shared_tokenizer))
+        .nest(
+            "/tokenize",
+            Router::new()
+                .route("/simple", post(simple_tokenize))
+                .route("/standard-bpe", post(bpe_tokenize))
+                .route("/byte-level-bpe/train", post(bl_bpe_train))
+                .route("/byte-level-bpe/encode", post(bl_bpe_encode))
+                .route("/byte-level-bpe/decode", post(bl_bpe_decode)),
+        )
+        .layer(Extension(shared_state))
 }
 
 async fn health_check() -> Response {
     StatusCode::OK.into_response()
 }
 
-async fn tokenize(
-    Extension(state): Extension<SharedTokenizer>,
-    Path(method): Path<String>,
-    Json(payload): Json<TokenizeRequest>,
-) -> Result<Json<TokenizeResponse>, (StatusCode, String)> {
-    let tokenizer = state.tokenizer.lock().unwrap();
-
-    let tokens = match method.as_str() {
-        "bpe" => tokenizer.tokenize_bpe(&payload.text),
-        "words" => Tokenizer::tokenize_words(&payload.text),
-        "chars" => Tokenizer::tokenize_chars(&payload.text),
-        _ => return Err((StatusCode::BAD_REQUEST, "Invalid tokenization method".to_string())),
+async fn simple_tokenize(Json(payload): Json<SimpleRequest>) -> Result<Json<TokenizeResponse>, (StatusCode, String)> {
+    let tokens = match payload.method {
+        Method::Words => SimpleTokenizer::tokenize_words(&payload.text),
+        Method::Chars => SimpleTokenizer::tokenize_chars(&payload.text),
     };
 
     Ok(Json(TokenizeResponse { tokens }))
+}
+
+async fn bpe_tokenize(
+    Extension(state): Extension<Shared>,
+    Json(payload): Json<TextRequest>,
+) -> Result<Json<TokenizeResponse>, (StatusCode, String)> {
+    let tokens = with_locked_mutex(&state.standard_bpe, |tokenizer| tokenizer.tokenize(&payload.text))?;
+
+    Ok(Json(TokenizeResponse { tokens }))
+}
+
+async fn bl_bpe_train(
+    Extension(state): Extension<Shared>,
+    Json(payload): Json<TrainRequest>,
+) -> Result<Response, (StatusCode, String)> {
+    with_locked_mutex(&state.byte_level_bpe, |tokenizer| tokenizer.train(&payload.text, payload.size))?;
+
+    println!("Tokenizer trained successfully with size: {}", payload.size);
+
+    Ok(StatusCode::OK.into_response())
+}
+
+async fn bl_bpe_encode(
+    Extension(state): Extension<Shared>,
+    Json(payload): Json<TextRequest>,
+) -> Result<Json<EncodeResponse>, (StatusCode, String)> {
+    let tokens = with_locked_mutex(&state.byte_level_bpe, |tokenizer| tokenizer.encode(&payload.text))?;
+
+    Ok(Json(EncodeResponse { tokens }))
+}
+
+async fn bl_bpe_decode(
+    Extension(state): Extension<Shared>,
+    Json(payload): Json<DecodeRequest>,
+) -> Result<Json<DecodeResponse>, (StatusCode, String)> {
+    let text = with_locked_mutex(&state.byte_level_bpe, |tokenizer| tokenizer.decode(&payload.tokens))?;
+
+    Ok(Json(DecodeResponse { text }))
+}
+
+fn with_locked_mutex<T, F, R>(mutex: &std::sync::Mutex<T>, f: F) -> Result<R, (StatusCode, String)>
+where
+    F: FnOnce(&mut T) -> R,
+{
+    let mut guard = mutex
+        .lock()
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to lock mutex: {}", err)))?;
+    Ok(f(&mut guard))
 }

@@ -11,28 +11,18 @@ const WORD_BREAK_CHAR: char = '▁';
 const UNKNOWN_TOKEN: &str = "<unk>";
 
 #[derive(Debug)]
-pub struct Tokenizer {
+pub struct StandardBPE {
     vocab: HashMap<String, isize>,
 }
 
-impl Tokenizer {
+impl StandardBPE {
     /// Creates a new Tokenizer with empty vocabulary
     pub fn new() -> Self {
         Self { vocab: HashMap::new() }
     }
 
-    /// Tokenizes text into words using whitespace separation
-    pub fn tokenize_words(text: &str) -> Vec<String> {
-        text.split_whitespace().map(|s| s.to_string()).collect()
-    }
-
-    /// Tokenizes text into individual characters
-    pub fn tokenize_chars(text: &str) -> Vec<String> {
-        text.chars().map(|c| c.to_string()).collect()
-    }
-
     /// Tokenizes text using the BPE algorithm
-    pub fn tokenize_bpe(&self, text: &str) -> Vec<String> {
+    pub fn tokenize(&self, text: &str) -> Vec<String> {
         self.split_into_sentences(text).flatten().collect()
     }
 
@@ -83,6 +73,7 @@ impl Tokenizer {
         vec![UNKNOWN_TOKEN.to_string()]
     }
 
+    /// Loading a dictionary from a file
     pub fn load_vocab_from_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let file = File::open(path)?;
         let reader = io::BufReader::new(file);
