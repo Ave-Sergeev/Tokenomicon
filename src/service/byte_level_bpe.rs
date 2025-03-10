@@ -15,7 +15,7 @@ impl ByteLevelBPE {
         let mut vocab = HashMap::new();
         vocab.insert(UNKNOWN_TOKEN.to_vec(), 0);
 
-        let reverse_vocab = vec![(0, UNKNOWN_TOKEN.to_vec())].into_iter().collect();
+        let reverse_vocab = HashMap::from([(0, UNKNOWN_TOKEN.to_vec())]);
 
         Self {
             vocab,
@@ -25,15 +25,20 @@ impl ByteLevelBPE {
         }
     }
 
+    pub fn get_vocab(&self) -> &HashMap<Vec<u8>, u32> {
+        &self.vocab
+    }
+
     pub fn train(&mut self, text: &str, vocab_size: usize) {
         let bytes = text.as_bytes();
-        let mut tokens: Vec<Vec<u8>> = bytes.iter().map(|&b| vec![b]).collect();
+        let mut tokens = bytes.iter().map(|&b| vec![b]).collect::<Vec<Vec<_>>>();
 
         let mut vocab = self.vocab.clone();
         let mut reverse_vocab = self.reverse_vocab.clone();
         let mut current_id = *reverse_vocab.keys().max().unwrap_or(&0) + 1;
 
-        let unique_bytes: HashSet<Vec<u8>> = bytes.iter().map(|&b| vec![b]).collect();
+        let unique_bytes = bytes.iter().map(|&byte| vec![byte]).collect::<HashSet<Vec<_>>>();
+
         for byte in unique_bytes {
             if !vocab.contains_key(&byte) {
                 vocab.insert(byte.clone(), current_id);
@@ -42,7 +47,7 @@ impl ByteLevelBPE {
             }
         }
 
-        while vocab.len() < vocab_size {
+        while vocab.len() <= vocab_size {
             let mut pair_counts = HashMap::new();
 
             for pair in tokens.windows(2) {
@@ -50,14 +55,14 @@ impl ByteLevelBPE {
                 *pair_counts.entry(key).or_insert(0) += 1;
             }
 
-            if let Some(((p1, p2), _)) = pair_counts.into_iter().max_by_key(|&(_, count)| count) {
-                let new_token = [&p1[..], &p2[..]].concat();
+            if let Some(((pair1, pair2), _)) = pair_counts.into_iter().max_by_key(|&(_, count)| count) {
+                let new_token = [&pair1[..], &pair2[..]].concat();
 
                 if vocab.contains_key(&new_token) {
                     continue;
                 }
 
-                self.merges.push((p1.clone(), p2.clone()));
+                self.merges.push((pair1.clone(), pair2.clone()));
 
                 vocab.insert(new_token.clone(), current_id);
                 reverse_vocab.insert(current_id, new_token);
@@ -67,8 +72,8 @@ impl ByteLevelBPE {
                 let mut i = 0;
 
                 while i < tokens.len() {
-                    if i < tokens.len() - 1 && tokens[i] == p1 && tokens[i + 1] == p2 {
-                        new_tokens.push([&p1[..], &p2[..]].concat());
+                    if i < tokens.len() - 1 && tokens[i] == pair1 && tokens[i + 1] == pair2 {
+                        new_tokens.push([&pair1[..], &pair2[..]].concat());
                         i += 2;
                     } else {
                         new_tokens.push(tokens[i].clone());
@@ -87,7 +92,8 @@ impl ByteLevelBPE {
     }
 
     pub fn encode(&self, text: &str) -> Vec<u32> {
-        let mut tokens: Vec<Vec<u8>> = text.as_bytes().iter().map(|&b| vec![b]).collect();
+        let bytes = text.as_bytes();
+        let mut tokens = bytes.iter().map(|&b| vec![b]).collect::<Vec<Vec<_>>>();
 
         for (p1, p2) in &self.merges {
             let merged = [&p1[..], &p2[..]].concat();
@@ -105,8 +111,8 @@ impl ByteLevelBPE {
 
         tokens
             .iter()
-            .map(|t| *self.vocab.get(t).unwrap_or(&self.unk_id))
-            .collect()
+            .map(|token| *self.vocab.get(token).unwrap_or(&self.unk_id))
+            .collect::<Vec<_>>()
     }
 
     pub fn decode(&self, ids: &[u32]) -> String {

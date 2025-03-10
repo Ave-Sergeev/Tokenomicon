@@ -1,5 +1,5 @@
 use crate::models::request::{DecodeRequest, Method, SimpleRequest, TextRequest, TrainRequest};
-use crate::models::response::{DecodeResponse, EncodeResponse, TokenizeResponse};
+use crate::models::response::{DecodeResponse, EncodeResponse, TokenizeResponse, VocabResponse};
 use crate::service::shared_state::Shared;
 use crate::service::simple_tokenizer::SimpleTokenizer;
 use axum::response::Response;
@@ -8,8 +8,9 @@ use axum::{
     extract::{Extension, Json},
     http::StatusCode,
     response::IntoResponse,
-    routing::{post, Router},
+    routing::{Router, post},
 };
+use std::collections::HashMap;
 
 pub fn system_routes() -> Router {
     Router::new().route("/health", get(health_check))
@@ -54,12 +55,20 @@ async fn bpe_tokenize(
 async fn bl_bpe_train(
     Extension(state): Extension<Shared>,
     Json(payload): Json<TrainRequest>,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Json<VocabResponse>, (StatusCode, String)> {
     with_locked_mutex(&state.byte_level_bpe, |tokenizer| tokenizer.train(&payload.text, payload.size))?;
 
-    println!("Tokenizer trained successfully with size: {}", payload.size);
+    let vocab = with_locked_mutex(&state.byte_level_bpe, |tokenizer| {
+        tokenizer
+            .get_vocab()
+            .iter()
+            .map(|(k, v)| (String::from_utf8_lossy(k).to_string(), *v))
+            .collect::<HashMap<_, _>>()
+    })?;
 
-    Ok(StatusCode::OK.into_response())
+    let vocab_size = vocab.len();
+
+    Ok(Json(VocabResponse { vocab_size, vocab }))
 }
 
 async fn bl_bpe_encode(
@@ -86,6 +95,6 @@ where
 {
     let mut guard = mutex
         .lock()
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to lock mutex: {}", err)))?;
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to lock mutex: {err}")))?;
     Ok(f(&mut guard))
 }

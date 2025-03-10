@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Settings:\n{}", settings.json_pretty());
 
     let address = &format!("{}:{}", settings.server.host, settings.server.port);
-    println!("Server listening on {}", address);
+    println!("Server listening on {address}");
 
     let listener = TcpListener::bind(address).await?;
 
