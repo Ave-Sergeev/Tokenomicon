@@ -1,8 +1,9 @@
 use crate::http::api::{system_routes, tokenize_routes};
 use crate::service::shared_state::Shared;
 use crate::setting::settings::Settings;
-use axum::http::{StatusCode, Uri};
 use axum::Router;
+use axum::http::{StatusCode, Uri};
+use std::error::Error;
 use tokio::net::TcpListener;
 
 mod http;
@@ -11,16 +12,18 @@ mod service;
 mod setting;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let settings = Settings::new("config.yaml")?;
-    println!("Settings:\n{}", settings.json_pretty());
+async fn main() -> Result<(), Box<dyn Error>> {
+    let settings = Settings::new("config.yaml").map_err(|err| format!("Failed to load settings: {err}"))?;
+    println!("Settings:\n{}\n", settings.json_pretty()?);
 
-    let address = &format!("{}:{}", settings.server.host, settings.server.port);
-    println!("Server listening on {}", address);
+    let address = format!("{}:{}", settings.server.host, settings.server.port);
+    println!("Server listening on {address}");
 
     let listener = TcpListener::bind(address).await?;
 
-    axum::serve(listener, routes()).await?;
+    axum::serve(listener, routes())
+        .await
+        .map_err(|err| format!("Server returned error: {err}"))?;
 
     Ok(())
 }

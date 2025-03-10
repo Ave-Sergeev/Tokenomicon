@@ -15,7 +15,7 @@ impl Shared {
 
         standard_bpe
             .load_vocab_from_file("./vocab/multi.wiki.bpe.vs1000000.vocab")
-            .unwrap();
+            .expect("Failed load vocab from file");
 
         Shared {
             standard_bpe: Arc::new(Mutex::new(standard_bpe)),

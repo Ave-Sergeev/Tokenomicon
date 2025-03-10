@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -13,4 +14,10 @@ pub struct EncodeResponse {
 #[derive(Serialize)]
 pub struct DecodeResponse {
     pub text: String,
+}
+
+#[derive(Serialize)]
+pub struct VocabResponse {
+    pub vocab_size: usize,
+    pub vocab: HashMap<String, u32>
 }
