@@ -1,5 +1,6 @@
+use anyhow::{Error, Result};
 use config::Config;
-use log::{log, Level};
+use log::{Level, log};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::path::Path;
@@ -16,7 +17,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(location: &str) -> anyhow::Result<Self> {
+    pub fn new(location: &str) -> Result<Self, Error> {
         let mut builder = Config::builder();
 
         if Path::new(location).exists() {
@@ -30,7 +31,9 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn json_pretty(&self) -> String {
-        to_string_pretty(&self).unwrap()
+    pub fn json_pretty(&self) -> Result<String, Error> {
+        let result = to_string_pretty(&self)?;
+
+        Ok(result)
     }
 }
