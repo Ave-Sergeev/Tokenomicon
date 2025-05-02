@@ -13,6 +13,8 @@ pub struct ByteLevelBPE {
 impl ByteLevelBPE {
     /// Initializes a new instance `ByteLevelBPE` with vocabulary with an unknown token and reverse vocabulary
     pub fn new() -> Self {
+        let unk_id = 0;
+        let merges = vec![];
         let mut vocab = HashMap::new();
         let reverse_vocab = HashMap::from([(0, UNKNOWN_TOKEN.to_vec())]);
 
@@ -20,14 +22,14 @@ impl ByteLevelBPE {
 
         Self {
             vocab,
-            merges: vec![],
+            merges,
             reverse_vocab,
-            unk_id: 0,
+            unk_id,
         }
     }
 
     /// Getter for vocabulary
-    pub fn get_vocab(&self) -> &HashMap<Vec<u8>, u32> {
+    pub fn vocab(&self) -> &HashMap<Vec<u8>, u32> {
         &self.vocab
     }
 

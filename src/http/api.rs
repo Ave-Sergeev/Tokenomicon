@@ -61,7 +61,7 @@ async fn bl_bpe_train(
 
     let vocab = with_locked_mutex(&state.byte_level_bpe, |tokenizer| {
         tokenizer
-            .get_vocab()
+            .vocab()
             .iter()
             .map(|(k, v)| (String::from_utf8_lossy(k).to_string(), *v))
             .collect::<HashMap<_, _>>()

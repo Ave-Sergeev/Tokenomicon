@@ -1,6 +1,5 @@
 use anyhow::{Error, Result};
 use config::Config;
-use log::{Level, log};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::path::Path;
@@ -12,8 +11,14 @@ pub struct Server {
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
+pub struct Logging {
+    pub log_level: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Settings {
     pub server: Server,
+    pub logging: Logging,
 }
 
 impl Settings {
@@ -23,7 +28,7 @@ impl Settings {
         if Path::new(location).exists() {
             builder = builder.add_source(config::File::with_name(location));
         } else {
-            log!(Level::Warn, "Configuration file not found");
+            log::warn!("Configuration file not found");
         }
 
         let settings = builder.build()?.try_deserialize()?;

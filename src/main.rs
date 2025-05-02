@@ -3,7 +3,10 @@ use crate::service::shared_state::Shared;
 use crate::setting::settings::Settings;
 use axum::Router;
 use axum::http::{StatusCode, Uri};
+use env_logger::Builder;
+use log::LevelFilter;
 use std::error::Error;
+use std::str::FromStr;
 use tokio::net::TcpListener;
 
 mod http;
@@ -14,10 +17,16 @@ mod setting;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let settings = Settings::new("config.yaml").map_err(|err| format!("Failed to load settings: {err}"))?;
-    println!("Settings:\n{}\n", settings.json_pretty()?);
+
+    Builder::new()
+        .filter_level(LevelFilter::from_str(settings.logging.log_level.as_str()).unwrap_or(LevelFilter::Info))
+        .init();
+
+    log::info!("Settings:\n{}", settings.json_pretty()?);
 
     let address = format!("{}:{}", settings.server.host, settings.server.port);
-    println!("Server listening on {address}");
+
+    log::info!("Server listening on: {address}");
 
     let listener = TcpListener::bind(address).await?;
 
